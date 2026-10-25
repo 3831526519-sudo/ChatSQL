@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatSQL 本机 MySQL 连接测试</title>
+  <style>
+    :root { color-scheme: light; font: 16px system-ui, sans-serif; }
+    body { max-width: 760px; margin: 36px auto; padding: 0 20px; color: #202733; }
+    h1 { font-size: 1.6rem; } p { line-height: 1.55; color: #4b5563; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    label { display: grid; gap: 6px; font-weight: 600; }
+    input { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #aab3bf; border-radius: 6px; font: inherit; }
+    .wide { grid-column: 1 / -1; }
+    button { padding: 10px 16px; border: 0; border-radius: 6px; background: #1463d8; color: white; font: inherit; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #result { margin-top: 20px; padding: 14px; border-radius: 6px; background: #f0f4f8; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note { border-left: 4px solid #e0a800; padding-left: 12px; }
+  </style>
+</head>
+<body>
+  <h1>ChatSQL 本机 MySQL 连接测试</h1>
+  <p class="note">仅连接到本机 ChatSQL API。密码仅用于本次测试，不会写入文件；测试结束后会清除输入框并关闭临时连接。请使用只读账号，并只填写允许访问的数据库和表。</p>
+  <form id="form" autocomplete="off">
+    <label>主机<input name="host" value="127.0.0.1" required></label>
+    <label>端口<input name="port" type="number" value="3306" min="1" max="65535" required></label>
+    <label>用户名<input name="user" required></label>
+    <label>密码<input name="password" type="password" autocomplete="new-password"></label>
+    <label>默认数据库<input name="database" value="menagerie" required></label>
+    <label>授权表（逗号分隔）<input name="allowedTables" value="pet,event" required></label>
+    <div class="wide"><button id="run" type="submit">测试连接并读取授权表结构</button></div>
+  </form>
+  <pre id="result" role="status" aria-live="polite">等待测试。</pre>
+  <script>
+    const form = document.querySelector('#form');
+    const run = document.querySelector('#run');
+    const result = document.querySelector('#result');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      run.disabled = true;
+      result.textContent = '正在连接并读取表结构……';
+      const values = new FormData(form);
+      const body = {
+        host: String(values.get('host')).trim(),
+        port: Number(values.get('port')),
+        user: String(values.get('user')).trim(),
+        password: String(values.get('password')),
+        database: String(values.get('database')).trim(),
+        allowedTables: String(values.get('allowedTables')).split(',').map((x) => x.trim()).filter(Boolean),
+      };
+      let connectionId = null;
+      try {
+        const testResponse = await fetch('/api/mysql/test', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const tested = await testResponse.json();
+        if (!testResponse.ok) throw new Error(tested.error || '连接测试失败');
+
+        const saveResponse = await fetch('/api/mysql/connections', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+        });
+        const saved = await saveResponse.json();
+        if (!saveResponse.ok) throw new Error(saved.error || '临时连接初始化失败');
+        connectionId = saved.connection.id;
+
+        const schemaResponse = await fetch(`/api/mysql/connections/${connectionId}/schema`);
+        const schema = await schemaResponse.json();
+        if (!schemaResponse.ok) throw new Error(schema.error || '读取 Schema 失败');
+        const summary = schema.tables.map((table) => `${table.name}: ${table.columns.map((column) => `${column.name} (${column.type})`).join(', ')}`).join('\n');
+        result.textContent = `连接成功\n数据库：${tested.database}\nMySQL 版本：${tested.serverVersion}\n授权表结构：\n${summary || '没有发现匹配的授权表；请检查默认数据库名和表名。'}`;
+      } catch (error) {
+        result.textContent = `测试未完成：${error.message}`;
+      } finally {
+        if (connectionId) {
+          await fetch(`/api/mysql/connections/${connectionId}`, { method: 'DELETE' }).catch(() => {});
+        }
+        form.elements.password.value = '';
+        body.password = '';
+        run.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
