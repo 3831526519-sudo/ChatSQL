@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ChatSQL · 查询与学习</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/education.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand">Chat<span>SQL</span></div><div class="topnote">单人 · 本机优先 · MySQL</div></header>
+  <main>
+    <div id="settings-view">
+    <section class="hero">
+      <div><p class="eyebrow">DATA SOURCES</p><h1 id="settings-heading" tabindex="-1">配置你的工作空间</h1><p>连接数据库、配置模型后，再进入独立的查询与学习工作台。</p></div>
+      <a class="link" href="/test">打开连接诊断页 →</a>
+    </section>
+    <section class="panel workspace-entry" aria-label="查询工作台入口">
+      <div><h2>开始查询与学习</h2><p id="entry-status" role="status" aria-live="polite">正在检查数据库与模型配置…</p><div class="readiness"><span id="database-ready" class="badge">数据库：检查中</span><span id="model-ready" class="badge">模型：检查中</span></div></div>
+      <button id="enter-workspace" type="button" disabled>进入查询工作台 →</button>
+    </section>
+    <div class="notice"><strong>凭据保护</strong><span>密码仅保存在本机 API 进程内存中，不写入文件、不返回给浏览器；服务重启后连接会清空。请优先使用只读 MySQL 账号，并仅授权所需表。</span></div>
+    <section class="panel">
+      <div class="section-heading"><div><h2>添加 MySQL 连接</h2><p>先测试成功才会加入当前运行会话。</p></div><span class="badge">MySQL</span></div>
+      <form id="connection-form" autocomplete="off">
+        <div class="grid">
+          <label>连接主机<input name="host" value="127.0.0.1" required autocomplete="off"></label>
+          <label>端口<input name="port" type="number" value="3306" min="1" max="65535" required></label>
+          <label>默认数据库<input name="database" placeholder="例如 menagerie" required autocomplete="off"></label>
+          <label>用户名<input name="user" required autocomplete="off"></label>
+          <label class="wide">密码<input name="password" type="password" autocomplete="new-password"></label>
+          <label class="wide">授权表（逗号分隔）<input name="allowedTables" placeholder="例如 pet,event" required autocomplete="off"><small>未开启整库授权时，只允许访问此处列出的表。</small></label>
+          <div class="wide authorization-box">
+            <label><input name="wholeDatabase" id="whole-database" type="checkbox">授权读取指定数据库的全部表（包括后续新增表）</label>
+            <label><input name="shareRecords" id="share-records" type="checkbox">允许 Agent 将已确认查询的少量记录提供给所配置的模型，辅助理解字段值</label>
+            <p>风险提示：整库授权只限上方默认数据库，始终只读；记录可能含个人信息或商业数据。勾选模型数据授权后，部分查询记录会发送到所配置的服务商。仅做有限字段过滤，不保证自动脱敏；不会主动上传整库。撤销授权请移除此连接。</p>
+            <label><input name="riskAccepted" id="risk-accepted" type="checkbox">我已理解并接受以上所选范围及数据发送风险</label>
+          </div>
+        </div>
+        <div class="form-actions"><button id="save-button" type="submit">测试并添加连接</button><span id="form-status" role="status" aria-live="polite"></span></div>
+      </form>
+    </section>
+    <section class="panel">
+      <div class="section-heading"><div><h2>已添加的数据源</h2><p>连接仅在此 API 进程运行期间保留。</p></div><button id="refresh-button" class="button-secondary" type="button">刷新</button></div>
+      <div id="connections" class="connection-list"><p class="muted">正在读取连接列表…</p></div>
+    </section>
+    <section class="panel schema-panel" id="schema-panel" hidden>
+      <div class="section-heading"><div><h2 id="schema-title">Schema</h2><p>仅展示当前连接授权的表结构。</p></div><button id="close-schema" class="button-secondary" type="button">收起</button></div>
+      <div id="schema-content"></div>
+    </section>
+    <section class="panel">
+      <div class="section-heading"><div><h2>模型 API</h2></div><span id="model-summary" class="badge">未配置</span></div>
+      <form id="model-form" autocomplete="off">
+        <div class="grid">
+          <label>API Base URL<input name="baseUrl" type="url" placeholder="https://api.deepseek.com/v1" required></label>
+          <label>模型名称<input name="model" placeholder="例如 deepseek-flash" required></label>
+          <label class="wide">API Key<input name="apiKey" type="password" autocomplete="new-password" required></label>
+        </div>
+        <div class="form-actions"><button id="save-model" type="submit">保存模型配置</button><button id="remove-model" type="button" class="button-secondary">清除模型配置</button><span id="model-status" role="status"></span></div>
+      </form>
+    </section>
+    </div>
+    <section id="workspace-view" hidden aria-label="查询与学习工作台">
+      <div class="workspace-bar">
+        <button id="back-settings" class="button-secondary" type="button">← 返回配置</button>
+        <h1 id="workspace-heading" tabindex="-1">SQL 工作台</h1>
+        <div class="workspace-options">
+          <label>数据源 <select id="query-connection" required aria-label="选择数据源"></select></label>
+          <label>行数上限 <input id="query-limit" type="number" min="1" max="1000" value="100" required></label>
+          <label class="learning-switch"><input id="learning" type="checkbox">学习模式</label>
+        </div>
+      </div>
+      <div id="studio-layout" class="studio-layout">
+        <aside id="learning-panel" class="lesson-pane" hidden aria-labelledby="lesson-heading">
+          <div class="lesson-header"><span class="lesson-icon" aria-hidden="true">✦</span><div><h2 id="lesson-heading">读懂这条 SQL</h2><p>从查询意图到每个关键子句</p></div></div>
+          <button id="refresh-education" type="button" class="button-secondary">更新本句讲解</button>
+          <div id="learning-content"><p class="lesson-empty">生成或输入 SQL 后，这里会逐段解释结构和写法。</p></div>
+        </aside>
+        <div class="studio-main">
+          <section class="editor-pane" aria-label="SQL 编辑器">
+            <form id="chat-form" class="prompt-bar">
+              <span class="prompt-spark" aria-hidden="true">✦</span>
+              <input id="chat-question" maxlength="4000" placeholder="用自然语言描述需求，例如：查询所有狗的名字" aria-label="自然语言查询指令" required autocomplete="off">
+              <button id="ask-button" type="submit" aria-label="翻译为 SQL" title="翻译为 SQL">→</button>
+            </form>
+            <div class="sharing-row"><label><input id="share-schema" type="checkbox" form="chat-form" required>允许将本次问题及授权表结构发送给已配置的模型（不含密码和查询结果）</label></div>
+            <form id="query-form">
+              <div class="editor-heading"><span>SQL 编辑器</span><span id="editor-state">可直接编写，也可由模型生成</span></div>
+              <div class="code-editor"><div id="line-numbers" aria-hidden="true">1</div><textarea id="query-sql" aria-label="SQL 代码" spellcheck="false" wrap="off" placeholder="在上方输入需求，或在这里编写 SELECT 查询…" required></textarea></div>
+              <div class="editor-bottom">
+                <div class="parameter-details"><label for="query-params">绑定参数（按 SQL 中 ? 的顺序）</label><input id="query-params" value="[]" aria-label="查询参数数组"><p id="parameter-summary" role="status" aria-live="polite">当前没有绑定参数。</p></div>
+                <div class="editor-actions"><button id="reset-sql" type="button" class="button-secondary" title="恢复最近一次模型生成的 SQL">重置</button><button type="submit" id="preview-button">运行 SQL</button></div>
+              </div>
+            </form>
+            <div id="plan-summary" class="plan-summary" hidden aria-label="本次查询计划"></div>
+            <p id="work-status" role="status" aria-live="polite">准备就绪，输入问题开始探索。</p>
+          </section>
+          <section class="results-pane" aria-label="结果与数据表">
+            <div id="result-tabs" class="result-tabs" role="tablist" aria-label="查询结果与授权数据表"><button id="result-tab" type="button" role="tab" aria-selected="true" aria-controls="query-results" tabindex="0">查询结果</button></div>
+            <div id="query-results" class="result-content" role="tabpanel" aria-labelledby="result-tab"><div class="result-empty"><span aria-hidden="true">▤</span><p>尚未执行任何查询</p><small>生成或编写 SQL 后，点击“运行 SQL”。</small></div></div>
+            <div id="table-content" class="result-content" role="tabpanel" hidden></div>
+          </section>
+        </div>
+      </div>
+      <dialog id="query-preview" aria-labelledby="confirm-heading">
+        <h2 id="confirm-heading">确认运行 SQL</h2><p>请核对最终 SQL、参数及返回行数上限。此操作只读取数据。</p><pre id="preview-sql"></pre><p id="preview-meta"></p>
+        <div class="form-actions"><button id="cancel-query" type="button" class="button-secondary">取消</button><button id="confirm-query" type="button">确认运行</button></div>
+      </dialog>
+    </section>
+    <footer>ChatSQL 原型 · 单人只读 Agent · 模型生成与业务解释需要你核对</footer>
+  </main>
+</body>
+</html>
